@@ -21,7 +21,7 @@ Native macOS menu bar app that shows your current external IP geolocation in rea
 ## Installation (Homebrew)
 
 ```bash
-brew tap svishniakov/ip-region-bar https://github.com/svishniakov/ip-region-bar
+brew tap svishniakov/ip-region-bar
 brew install --cask ipregionbar
 ```
 

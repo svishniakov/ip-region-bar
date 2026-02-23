@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated release pipeline to build universal app (`arm64 + x86_64`) and auto-bump cask version/sha256.
 - Simplified release pipeline to operate without paid Apple Developer signing/notarization.
 - Removed bundled DB files from repository/build/release artifacts.
+- Moved Homebrew tap publishing to dedicated repository `svishniakov/homebrew-ip-region-bar` for short `brew tap svishniakov/ip-region-bar` installs.
 
 ### Removed
 - Onboarding window and Keychain-based license key flow.

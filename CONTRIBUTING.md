@@ -19,21 +19,22 @@ On first launch, install DB-IP Lite from inside the app using **Download databas
 
 ## Homebrew Cask
 
-This repository is also a Homebrew tap. The cask file is:
+Homebrew tap is hosted in a separate repository:
 
-- `Casks/ipregionbar.rb`
+- `https://github.com/svishniakov/homebrew-ip-region-bar`
 
 For local verification:
 
 ```bash
-brew tap svishniakov/ip-region-bar https://github.com/svishniakov/ip-region-bar
+brew tap svishniakov/ip-region-bar
 brew audit --cask --strict ipregionbar
 ```
 
-Release workflow updates `version` and `sha256` in `Casks/ipregionbar.rb` automatically after a tagged release (`v*`).
+Release workflow updates `version` and `sha256` in the tap repository after a tagged release (`v*`).
+To enable automatic tap updates, configure repository secret `TAP_REPO_TOKEN` in this repository with push access to `svishniakov/homebrew-ip-region-bar`.
 
 Current release workflow does not require Apple signing/notarization secrets.
-It builds a universal app, creates DMG, uploads release asset, and auto-bumps cask `version` + `sha256`.
+It builds a universal app, creates DMG, uploads release asset, and auto-bumps tap cask `version` + `sha256`.
 
 ## Code Style
 

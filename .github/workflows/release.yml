@@ -25,21 +25,34 @@ jobs:
           files: build/IPRegionBar.dmg
           generate_release_notes: true
 
-      - name: Commit and push cask update to main
+      - name: Update Homebrew tap cask
         env:
           VERSION: ${{ github.ref_name }}
+          TAP_REPO_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
         run: |
-          VERSION="${VERSION#v}"
-          SHA="$(shasum -a 256 build/IPRegionBar.dmg | awk '{print $1}')"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
-          perl -0pi -e "s/version \".*\"/version \"${VERSION}\"/; s/sha256 \".*\"/sha256 \"${SHA}\"/" Casks/ipregionbar.rb
-          git add Casks/ipregionbar.rb
-          if git diff --cached --quiet; then
-            echo "No cask changes to commit"
+          if [ -z "${TAP_REPO_TOKEN}" ]; then
+            echo "TAP_REPO_TOKEN is not configured; skipping tap cask update."
             exit 0
           fi
-          git commit -m "chore(cask): update ipregionbar to v${VERSION}"
-          git push origin main
+
+          VERSION="${VERSION#v}"
+          SHA="$(shasum -a 256 build/IPRegionBar.dmg | awk '{print $1}')"
+          TAP_REPO_DIR="$(mktemp -d)"
+          TAP_REPO_URL="https://x-access-token:${TAP_REPO_TOKEN}@github.com/svishniakov/homebrew-ip-region-bar.git"
+
+          git clone "${TAP_REPO_URL}" "${TAP_REPO_DIR}"
+          mkdir -p "${TAP_REPO_DIR}/Casks"
+          cp Casks/ipregionbar.rb "${TAP_REPO_DIR}/Casks/ipregionbar.rb"
+          perl -0pi -e "s/version \".*\"/version \"${VERSION}\"/; s/sha256 \".*\"/sha256 \"${SHA}\"/" "${TAP_REPO_DIR}/Casks/ipregionbar.rb"
+
+          git -C "${TAP_REPO_DIR}" config user.name "github-actions[bot]"
+          git -C "${TAP_REPO_DIR}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "${TAP_REPO_DIR}" add Casks/ipregionbar.rb
+
+          if git -C "${TAP_REPO_DIR}" diff --cached --quiet; then
+            echo "No tap cask changes to commit"
+            exit 0
+          fi
+
+          git -C "${TAP_REPO_DIR}" commit -m "chore(cask): update ipregionbar to v${VERSION}"
+          git -C "${TAP_REPO_DIR}" push origin main
