@@ -4,52 +4,52 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://support.apple.com/en-us/102861)
 
-Native macOS menu bar app that shows your current external IP geolocation in real time.
+A native macOS menu bar app that shows your current external IP geolocation in real time.
 
-## Highlights
+## Features
 
-- First-run setup: download DB-IP Lite from inside the app
-- Local geolocation lookup via user-downloaded DB-IP Lite `.mmdb`
+- First-run setup: download DB-IP Lite directly from inside the app
+- Local geolocation lookup using a user-downloaded DB-IP Lite `.mmdb`
 - Privacy-first: no third-party geolocation API calls
-- Offline-ready: shows last known region when the network is down
-- Auto refresh on network/VPN changes
+- Offline-ready: shows the last known region when the network is down
+- Automatic refresh on network/VPN changes
 
 ## Screenshot
 
 ![IP Region Bar menu screenshot](docs/assets/menu-screenshot.svg)
 
-## Installation (Homebrew)
+## Quick Start (Homebrew)
 
 ```bash
 brew tap svishniakov/ip-region-bar
 brew install --cask ipregionbar
 ```
 
-## First Run Setup
+## First-Run Setup
 
-After launch, click **Download DB-IP database now** in menu or Preferences.
-Geolocation features become available right after the database is installed.
+After launching the app, click **Download DB-IP database now** in the menu or in Preferences.
+Geolocation becomes available immediately after the database is installed.
 
-## First Launch Note (Without Apple Notarization)
+## First Launch Note (No Apple Notarization)
 
 This project currently ships without Apple Developer notarization.
-If macOS blocks launch after Homebrew install, run:
+If macOS blocks launch after Homebrew installation, run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/IPRegionBar.app
 ```
 
-## Update (Homebrew)
+## Update
 
 ```bash
 brew upgrade --cask ipregionbar
 ```
 
-## Manual Installation
+## Manual Install
 
 1. Open [Releases](https://github.com/svishniakov/ip-region-bar/releases)
 2. Download `IPRegionBar.dmg`
-3. Move `IPRegionBar.app` to `Applications`
+3. Move `IPRegionBar.app` to `/Applications`
 4. Launch the app
 
 ## Build from Source
@@ -77,9 +77,9 @@ make dmg
 Use **Update database now** in Preferences for manual updates.
 Monthly auto-update is enabled by default and can be toggled in Preferences.
 
-## Attribution (Required by DB-IP License)
+## Attribution (Required by the DB-IP License)
 
-This product includes IP geolocation data created by DB-IP.com, available from [https://db-ip.com](https://db-ip.com).
+This product includes IP geolocation data created by DB-IP.com, available at [https://db-ip.com](https://db-ip.com).
 
 ## Privacy
 

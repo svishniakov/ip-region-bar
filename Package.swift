@@ -36,5 +36,10 @@ let package = Package(
                 .linkedFramework("Security"),
             ]
         ),
+        .testTarget(
+            name: "IPRegionBarTests",
+            dependencies: ["IPRegionBar"],
+            path: "IPRegionBarTests"
+        ),
     ]
 )

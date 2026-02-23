@@ -2,16 +2,47 @@ import Foundation
 import MMDB
 
 actor DBIPDatabase {
+    typealias DownloadArchive = (URLRequest) async throws -> (URL, URLResponse)
+    typealias DecompressArchive = (URL) throws -> URL
+    typealias ValidateDatabase = (URL) -> Bool
+    typealias NowProvider = () -> Date
+
     static let shared = DBIPDatabase()
 
-    private let fileManager = FileManager.default
+    private let fileManager: FileManager
+    private let defaults: UserDefaults
+    private let appSupportRoot: URL
     private let updateInterval: TimeInterval = 30 * 24 * 3600
     private let databaseFilename = "dbip-city-lite.mmdb"
+    private let downloadArchive: DownloadArchive
+    private let decompressArchiveFn: DecompressArchive
+    private let validateDatabaseFn: ValidateDatabase
+    private let nowProvider: NowProvider
 
     private var transientStatus: DatabaseStatus?
 
+    init(
+        fileManager: FileManager = .default,
+        defaults: UserDefaults = .standard,
+        appSupportRoot: URL? = nil,
+        nowProvider: @escaping NowProvider = Date.init,
+        downloadArchive: @escaping DownloadArchive = { request in
+            try await URLSession.shared.download(for: request)
+        },
+        decompressArchive: @escaping DecompressArchive = DBIPDatabase.defaultDecompressArchive,
+        validateDatabase: @escaping ValidateDatabase = DBIPDatabase.defaultValidateDatabase
+    ) {
+        self.fileManager = fileManager
+        self.defaults = defaults
+        self.appSupportRoot = appSupportRoot ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        self.nowProvider = nowProvider
+        self.downloadArchive = downloadArchive
+        self.decompressArchiveFn = decompressArchive
+        self.validateDatabaseFn = validateDatabase
+    }
+
     var userDBURL: URL {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        appSupportRoot
             .appendingPathComponent("IPRegionBar", isDirectory: true)
             .appendingPathComponent(databaseFilename)
     }
@@ -84,7 +115,7 @@ actor DBIPDatabase {
             return false
         }
 
-        return Date().timeIntervalSince(referenceDate) > updateInterval
+        return nowProvider().timeIntervalSince(referenceDate) > updateInterval
     }
 
     private func performUpdate() async -> Bool {
@@ -92,9 +123,9 @@ actor DBIPDatabase {
 
         do {
             let installedMonth = try await downloadAndInstall(usingCandidateMonths: candidateMonths())
-            UserDefaults.standard.set(Date(), forKey: SettingsKey.dbLastUpdated)
-            UserDefaults.standard.set(installedMonth, forKey: SettingsKey.dbMonth)
-            UserDefaults.standard.set(true, forKey: SettingsKey.dbInstalledByUser)
+            defaults.set(nowProvider(), forKey: SettingsKey.dbLastUpdated)
+            defaults.set(installedMonth, forKey: SettingsKey.dbMonth)
+            defaults.set(true, forKey: SettingsKey.dbInstalledByUser)
             transientStatus = nil
             return true
         } catch {
@@ -130,7 +161,7 @@ actor DBIPDatabase {
 
     private func downloadDatabaseArchive(from url: URL, yearMonth: String) async throws -> URL {
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        let (tempURL, response) = try await URLSession.shared.download(for: request)
+        let (tempURL, response) = try await downloadArchive(request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw DBIPDatabaseError.httpFailed(status: -1)
@@ -152,22 +183,11 @@ actor DBIPDatabase {
     }
 
     private func decompressArchive(_ gzURL: URL) throws -> URL {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
-        process.arguments = ["-f", gzURL.path]
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw DBIPDatabaseError.decompressionFailed
-        }
-
-        return gzURL.deletingPathExtension()
+        try decompressArchiveFn(gzURL)
     }
 
     private func validateDatabase(at fileURL: URL) throws {
-        guard MMDB(fileURL.path) != nil else {
+        guard validateDatabaseFn(fileURL) else {
             throw DBIPDatabaseError.validationFailed
         }
     }
@@ -190,15 +210,15 @@ actor DBIPDatabase {
     }
 
     private func shouldUpdate() -> Bool {
-        guard let lastUpdate = UserDefaults.standard.object(forKey: SettingsKey.dbLastUpdated) as? Date else {
+        guard let lastUpdate = defaults.object(forKey: SettingsKey.dbLastUpdated) as? Date else {
             return true
         }
 
-        return Date().timeIntervalSince(lastUpdate) > updateInterval
+        return nowProvider().timeIntervalSince(lastUpdate) > updateInterval
     }
 
     private func reminderReferenceDate() -> Date? {
-        if let lastUpdate = UserDefaults.standard.object(forKey: SettingsKey.dbLastUpdated) as? Date {
+        if let lastUpdate = defaults.object(forKey: SettingsKey.dbLastUpdated) as? Date {
             return lastUpdate
         }
 
@@ -215,14 +235,13 @@ actor DBIPDatabase {
     }
 
     private func resolveInstalledMonth() -> String {
-        guard let month = UserDefaults.standard.string(forKey: SettingsKey.dbMonth), !month.isEmpty else {
+        guard let month = defaults.string(forKey: SettingsKey.dbMonth), !month.isEmpty else {
             return "unknown"
         }
         return month
     }
 
     private func isAutoUpdateEnabled() -> Bool {
-        let defaults = UserDefaults.standard
         if defaults.object(forKey: SettingsKey.autoUpdateDB) == nil {
             return AppDefaults.autoUpdateDB
         }
@@ -230,7 +249,7 @@ actor DBIPDatabase {
     }
 
     private func isUserInstalled() -> Bool {
-        UserDefaults.standard.bool(forKey: SettingsKey.dbInstalledByUser)
+        defaults.bool(forKey: SettingsKey.dbInstalledByUser)
     }
 
     private func candidateMonths() -> [String] {
@@ -245,22 +264,40 @@ actor DBIPDatabase {
     }
 
     private func currentYearMonth() -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM"
-        return formatter.string(from: Date())
+        formatMonth(nowProvider())
     }
 
     private func previousYearMonth() -> String {
         let calendar = Calendar(identifier: .gregorian)
-        let previous = calendar.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+        let previous = calendar.date(byAdding: .month, value: -1, to: nowProvider()) ?? nowProvider()
+        return formatMonth(previous)
+    }
 
+    private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.calendar = calendar
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM"
-        return formatter.string(from: previous)
+        return formatter.string(from: date)
+    }
+
+    private static func defaultDecompressArchive(_ gzURL: URL) throws -> URL {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
+        process.arguments = ["-f", gzURL.path]
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw DBIPDatabaseError.decompressionFailed
+        }
+
+        return gzURL.deletingPathExtension()
+    }
+
+    private static func defaultValidateDatabase(_ fileURL: URL) -> Bool {
+        MMDB(fileURL.path) != nil
     }
 }
 

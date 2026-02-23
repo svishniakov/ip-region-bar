@@ -51,7 +51,7 @@ enum MenuBuilder {
             menu.addItem(setupItem)
         }
 
-        if needsDatabaseUpdateReminder {
+        if needsDatabaseUpdateReminder, case .installed = databaseStatus {
             let reminderItem = NSMenuItem(title: "❗️ Need to update GeoIP database", action: nil, keyEquivalent: "")
             reminderItem.isEnabled = false
             reminderItem.attributedTitle = NSAttributedString(
