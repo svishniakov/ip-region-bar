@@ -6,6 +6,7 @@ enum SettingsKey {
     static let launchAtLogin = "launchAtLogin"
     static let autoUpdateDB = "autoUpdateDB"
     static let dbLastUpdated = "dbLastUpdated"
+    static let dbMonth = "dbMonth"
     static let ipProvider = "ipProvider"
     static let requestTimeout = "requestTimeout"
     static let lastKnownIPInfo = "lastKnownIPInfo"
@@ -20,7 +21,8 @@ enum AppDefaults {
     static let requestTimeout: TimeInterval = 5
 
     static func register() {
-        UserDefaults.standard.register(defaults: [
+        let defaults = UserDefaults.standard
+        defaults.register(defaults: [
             SettingsKey.displayMode: displayMode,
             SettingsKey.refreshInterval: refreshInterval,
             SettingsKey.launchAtLogin: launchAtLogin,
@@ -28,5 +30,10 @@ enum AppDefaults {
             SettingsKey.ipProvider: ipProvider,
             SettingsKey.requestTimeout: requestTimeout,
         ])
+
+        // Persist defaults explicitly for settings that drive runtime reminders/state checks.
+        if defaults.object(forKey: SettingsKey.autoUpdateDB) == nil {
+            defaults.set(autoUpdateDB, forKey: SettingsKey.autoUpdateDB)
+        }
     }
 }

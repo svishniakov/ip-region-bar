@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>IPRegionBar</string>
     <key>CFBundleIdentifier</key>
-    <string>com.yourname.ipregionbar</string>
+    <string>com.svishniakov.ipregionbar</string>
     <key>CFBundleName</key>
     <string>IP Region Bar</string>
     <key>CFBundleDisplayName</key>

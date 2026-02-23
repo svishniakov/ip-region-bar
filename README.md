@@ -1,11 +1,18 @@
 # IP Region Bar
 
-[![CI](https://github.com/<user>/ipregionbar/actions/workflows/build.yml/badge.svg)](https://github.com/<user>/ipregionbar/actions/workflows/build.yml)
+[![CI](https://github.com/svishniakov/ip-region-bar/actions/workflows/build.yml/badge.svg)](https://github.com/svishniakov/ip-region-bar/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://support.apple.com/en-us/102861)
-[![Homebrew](https://img.shields.io/badge/Homebrew-Cask-orange)](https://brew.sh)
 
-IP Region Bar is a native macOS menu bar app (no Dock icon, no main window) that shows the geolocation of your current external IP in real time.
+Native macOS menu bar app that shows your current external IP geolocation in real time.
+
+## Highlights
+
+- Zero onboarding: works immediately after install
+- Local geolocation lookup via bundled DB-IP Lite `.mmdb`
+- Privacy-first: no third-party geolocation API calls
+- Offline-ready: shows last known region when the network is down
+- Auto refresh on network/VPN changes
 
 ## Screenshot
 
@@ -14,15 +21,31 @@ IP Region Bar is a native macOS menu bar app (no Dock icon, no main window) that
 ## Installation (Homebrew)
 
 ```bash
+brew tap svishniakov/ip-region-bar
 brew install --cask ipregionbar
+```
+
+## First Launch Note (Without Apple Notarization)
+
+This project currently ships without Apple Developer notarization.
+If macOS blocks launch after Homebrew install, run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/IPRegionBar.app
+```
+
+## Update (Homebrew)
+
+```bash
+brew upgrade --cask ipregionbar
 ```
 
 ## Manual Installation
 
-1. Open [Releases](https://github.com/<user>/ipregionbar/releases).
-2. Download `IPRegionBar.dmg`.
-3. Drag `IPRegionBar.app` to `Applications`.
-4. Launch the app.
+1. Open [Releases](https://github.com/svishniakov/ip-region-bar/releases)
+2. Download `IPRegionBar.dmg`
+3. Move `IPRegionBar.app` to `Applications`
+4. Launch the app
 
 ## Build from Source
 
@@ -44,27 +67,21 @@ make build
 make dmg
 ```
 
-## MaxMind Setup
+## Database Updates
 
-IP geolocation is resolved locally from the GeoLite2-City database.
+Monthly DB-IP Lite updates are handled by:
 
-1. Register a free account at [maxmind.com](https://www.maxmind.com/).
-2. Create a GeoLite2 License Key in your account.
-3. On first app launch, paste the key into onboarding.
-4. The app downloads `GeoLite2-City.mmdb` into:
-   `~/Library/Application Support/IPRegionBar/GeoLite2-City.mmdb`
+- CI workflow: `.github/workflows/update-db.yml`
+- Local script: `bash scripts/update-dbip.sh`
 
-Your external IP is fetched from `api64.ipify.org` (or `checkip.amazonaws.com` fallback), and geolocation lookup is done locally.
+## Attribution (Required by DB-IP License)
 
-## Requirements
-
-- macOS 13.0 Ventura or newer
+This product includes IP geolocation data created by DB-IP.com, available from [https://db-ip.com](https://db-ip.com).
 
 ## Privacy
 
-- External IP is fetched via HTTPS from IP-only providers.
-- Geolocation lookup runs locally using MaxMind database.
-- MaxMind License Key is stored in Keychain.
+- External IP is fetched from IP-only providers (`api64.ipify.org` / `checkip.amazonaws.com`)
+- Geolocation is resolved locally from bundled/user DB-IP `.mmdb`
 
 ## Contributing
 

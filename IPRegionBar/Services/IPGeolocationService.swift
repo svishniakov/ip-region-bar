@@ -7,11 +7,16 @@ actor IPGeolocationService {
     private var reader: MMDB?
 
     func loadDatabase() async throws {
-        let dbURL = await GeoLiteDatabase.shared.databaseURL
+        let dbURL = await DBIPDatabase.shared.activeDatabaseURL
         guard let loaded = MMDB(dbURL.path) else {
             throw GeoError.databaseNotLoaded
         }
         reader = loaded
+    }
+
+    func reloadDatabase() async throws {
+        reader = nil
+        try await loadDatabase()
     }
 
     func reloadDatabaseIfNeeded() async throws {
@@ -28,11 +33,64 @@ actor IPGeolocationService {
         guard let record = reader.lookup(ip: ip) else {
             throw GeoError.recordNotFound
         }
-        let countryCode = record.value(forPath: "country.iso_code") ?? ""
-        let countryName = record.value(forPath: "country.names.en") ?? "Unknown"
-        let city = record.value(forPath: "city.names.en") ?? ""
-        let region = record.value(forPath: "subdivisions.0.names.en") ?? ""
-        let timezone = record.value(forPath: "location.time_zone") ?? ""
+
+        var countryCode = record.firstNonEmptyValue(forPaths: [
+            "country.iso_code",
+            "country.code",
+            "country.country_code",
+            "countryCode",
+            "country_code",
+            "registered_country.iso_code",
+            "registered_country.code",
+        ]) ?? ""
+
+        var countryName = record.firstNonEmptyValue(forPaths: [
+            "country.names.en",
+            "country.name",
+            "country_name",
+            "registered_country.names.en",
+            "registered_country.name",
+        ]) ?? ""
+
+        if countryCode.isEmpty, let countryValue = record.value(forPath: "country"), countryValue.count == 2 {
+            countryCode = countryValue
+        }
+
+        if countryName.isEmpty, let countryValue = record.value(forPath: "country"), countryValue.count > 2 {
+            countryName = countryValue
+        }
+
+        countryCode = countryCode.uppercased()
+
+        if countryName.isEmpty, countryCode.count == 2 {
+            let locale = Locale(identifier: "en_US_POSIX")
+            countryName = locale.localizedString(forRegionCode: countryCode) ?? ""
+        }
+
+        if countryName.isEmpty {
+            countryName = "Unknown"
+        }
+
+        let city = record.firstNonEmptyValue(forPaths: [
+            "city.names.en",
+            "city.name",
+            "city",
+            "city_name",
+        ]) ?? ""
+
+        let region = record.firstNonEmptyValue(forPaths: [
+            "subdivisions.0.names.en",
+            "subdivisions.0.name",
+            "stateProv",
+            "state_prov",
+            "region",
+        ]) ?? ""
+
+        let timezone = record.firstNonEmptyValue(forPaths: [
+            "location.time_zone",
+            "time_zone",
+            "timezone",
+        ]) ?? ""
 
         return IPInfo(
             ip: ip,
@@ -60,6 +118,15 @@ enum GeoError: LocalizedError {
 }
 
 private extension NSDictionary {
+    func firstNonEmptyValue(forPaths paths: [String]) -> String? {
+        for path in paths {
+            if let value = value(forPath: path), !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
     func value(forPath path: String) -> String? {
         let parts = path.split(separator: ".").map(String.init)
         var current: Any = self
@@ -83,6 +150,12 @@ private extension NSDictionary {
             return nil
         }
 
-        return current as? String
+        if let value = current as? String {
+            return value
+        }
+        if let value = current as? NSNumber {
+            return value.stringValue
+        }
+        return nil
     }
 }

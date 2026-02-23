@@ -5,7 +5,8 @@ enum MenuBuilder {
     static func build(
         state: AppState,
         info: IPInfo?,
-        databaseStatus: DatabaseStatus
+        databaseStatus: DatabaseStatus,
+        needsDatabaseUpdateReminder: Bool
     ) -> NSMenu {
         let menu = NSMenu()
 
@@ -44,6 +45,19 @@ enum MenuBuilder {
         )
         menu.addItem(dbItem)
 
+        if needsDatabaseUpdateReminder {
+            let reminderItem = NSMenuItem(title: "❗️ Need to update GeoIP database", action: nil, keyEquivalent: "")
+            reminderItem.isEnabled = false
+            reminderItem.attributedTitle = NSAttributedString(
+                string: reminderItem.title,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.systemOrange,
+                ]
+            )
+            menu.addItem(reminderItem)
+        }
+
         menu.addItem(.separator())
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(StatusBarController.refreshNow), keyEquivalent: "r")
@@ -58,11 +72,15 @@ enum MenuBuilder {
 
         menu.addItem(.separator())
 
+        let about = NSMenuItem(title: "About IP Region Bar", action: #selector(StatusBarController.openAbout), keyEquivalent: "")
+        menu.addItem(about)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit", action: #selector(StatusBarController.quitApp), keyEquivalent: "q")
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
 
-        // Targets are set by StatusBarController after building the menu.
         return menu
     }
 
@@ -70,8 +88,6 @@ enum MenuBuilder {
         switch state {
         case .loading:
             return "Loading…"
-        case .onboarding:
-            return "Setup required"
         case .error(let message):
             return "Error: \(message)"
         case .offline(let last):
@@ -86,27 +102,15 @@ enum MenuBuilder {
 
     private static func databaseStatusTitle(_ status: DatabaseStatus) -> String {
         switch status {
-        case .missing:
-            return "Database: missing"
-        case let .downloading(progress):
-            return "Database: downloading \(Int(progress * 100))%"
-        case let .ready(updatedAt):
-            return "Database: updated \(relativeDate(updatedAt))"
-        case let .outdated(updatedAt):
-            return "Database: outdated (\(relativeDate(updatedAt)))"
-        case let .updateFailed(error):
-            return "Database: update failed (\(error.localizedDescription))"
+        case .bundled(let month):
+            return "Database: DB-IP Lite · \(month)"
+        case .updated(let month):
+            return "Database: DB-IP Lite · \(month)"
+        case .updating:
+            return "Database: updating…"
+        case .updateFailed:
+            return "Database: update failed"
         }
-    }
-
-    private static func relativeDate(_ date: Date) -> String {
-        if date == .distantPast {
-            return "unknown"
-        }
-
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private static func copyableItem(label: String, value: String, action: Selector, target: AnyObject?) -> NSMenuItem {

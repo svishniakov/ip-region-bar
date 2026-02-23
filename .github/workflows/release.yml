@@ -4,19 +4,19 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Build Universal Binary
         run: make build
-      - name: Notarize
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: make notarize
       - name: Create DMG
         run: make dmg
       - name: Upload Release Asset
@@ -24,3 +24,22 @@ jobs:
         with:
           files: build/IPRegionBar.dmg
           generate_release_notes: true
+
+      - name: Commit and push cask update to main
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          SHA="$(shasum -a 256 build/IPRegionBar.dmg | awk '{print $1}')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          perl -0pi -e "s/version \".*\"/version \"${VERSION}\"/; s/sha256 \".*\"/sha256 \"${SHA}\"/" Casks/ipregionbar.rb
+          git add Casks/ipregionbar.rb
+          if git diff --cached --quiet; then
+            echo "No cask changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(cask): update ipregionbar to v${VERSION}"
+          git push origin main

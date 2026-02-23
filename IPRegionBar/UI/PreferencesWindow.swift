@@ -15,12 +15,13 @@ final class PreferencesWindowController: NSWindowController {
     private let refreshPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at Login", target: nil, action: nil)
 
-    private let licenseKeySecureField = NSSecureTextField(string: "")
-    private let licenseKeyPlainField = NSTextField(string: "")
-    private let showLicenseButton = NSButton(checkboxWithTitle: "Show", target: nil, action: nil)
-    private let dbStatusLabel = NSTextField(labelWithString: "Database status: —")
+    private let dbVersionLabel = NSTextField(labelWithString: "Database version: DB-IP Lite · unknown")
+    private let lastUpdatedLabel = NSTextField(labelWithString: "Last updated: never")
     private let updateDBButton = NSButton(title: "Update database now", target: nil, action: nil)
-    private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Enable weekly auto-update", target: nil, action: nil)
+    private let updateProgressBar = NSProgressIndicator()
+    private let updateProgressLabel = NSTextField(labelWithString: "Updating database…")
+    private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Enable monthly auto-update", target: nil, action: nil)
+    private let attributionButton = NSButton(title: "IP geolocation by DB-IP.com", target: nil, action: nil)
 
     private let ipProviderPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let timeoutField = NSTextField(string: "")
@@ -28,7 +29,7 @@ final class PreferencesWindowController: NSWindowController {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 400),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -48,17 +49,36 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     func updateDatabaseStatus(_ status: DatabaseStatus) {
-        dbStatusLabel.stringValue = switch status {
-        case .missing:
-            "Database status: missing"
-        case let .downloading(progress):
-            "Database status: downloading \(Int(progress * 100))%"
-        case let .ready(updatedAt):
-            "Database status: updated \(formatted(updatedAt))"
-        case let .outdated(updatedAt):
-            "Database status: outdated (\(formatted(updatedAt)))"
-        case let .updateFailed(error):
-            "Database status: failed (\(error.localizedDescription))"
+        let isUpdating: Bool
+        switch status {
+        case .bundled(let month):
+            dbVersionLabel.stringValue = "Database version: DB-IP Lite · \(month)"
+            isUpdating = false
+        case .updated(let month):
+            dbVersionLabel.stringValue = "Database version: DB-IP Lite · \(month)"
+            isUpdating = false
+        case .updating:
+            dbVersionLabel.stringValue = "Database version: updating…"
+            isUpdating = true
+        case .updateFailed:
+            dbVersionLabel.stringValue = "Database version: update failed"
+            isUpdating = false
+        }
+
+        updateDBButton.isEnabled = !isUpdating
+        autoUpdateCheckbox.isEnabled = !isUpdating
+        updateProgressBar.isHidden = !isUpdating
+        updateProgressLabel.isHidden = !isUpdating
+        if isUpdating {
+            updateProgressBar.startAnimation(nil)
+        } else {
+            updateProgressBar.stopAnimation(nil)
+        }
+
+        if let updatedAt = UserDefaults.standard.object(forKey: SettingsKey.dbLastUpdated) as? Date {
+            lastUpdatedLabel.stringValue = "Last updated: \(formatted(updatedAt))"
+        } else {
+            lastUpdatedLabel.stringValue = "Last updated: bundled with app"
         }
     }
 
@@ -74,12 +94,17 @@ final class PreferencesWindowController: NSWindowController {
         refreshPopup.selectItem(at: RefreshIntervalOption.allCases.firstIndex(of: currentRefresh) ?? 1)
 
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
-
-        let licenseKey = (try? KeychainHelper.readLicenseKey()) ?? nil
-        licenseKeySecureField.stringValue = licenseKey ?? ""
-        licenseKeyPlainField.stringValue = licenseKey ?? ""
-
-        autoUpdateCheckbox.state = UserDefaults.standard.bool(forKey: SettingsKey.autoUpdateDB) ? .on : .off
+        let autoUpdateEnabled: Bool
+        if UserDefaults.standard.object(forKey: SettingsKey.autoUpdateDB) == nil {
+            autoUpdateEnabled = AppDefaults.autoUpdateDB
+        } else {
+            autoUpdateEnabled = UserDefaults.standard.bool(forKey: SettingsKey.autoUpdateDB)
+        }
+        autoUpdateCheckbox.state = autoUpdateEnabled ? .on : .off
+        if updateProgressBar.isHidden {
+            autoUpdateCheckbox.isEnabled = true
+            updateDBButton.isEnabled = true
+        }
 
         ipProviderPopup.removeAllItems()
         IPProvider.allCases.forEach { ipProviderPopup.addItem(withTitle: $0.title) }
@@ -89,12 +114,6 @@ final class PreferencesWindowController: NSWindowController {
 
         let timeout = UserDefaults.standard.double(forKey: SettingsKey.requestTimeout)
         timeoutField.stringValue = String(format: "%.0f", timeout == 0 ? AppDefaults.requestTimeout : timeout)
-
-        if let updatedAt = UserDefaults.standard.object(forKey: SettingsKey.dbLastUpdated) as? Date {
-            updateDatabaseStatus(.ready(updatedAt: updatedAt))
-        } else {
-            updateDatabaseStatus(.missing)
-        }
     }
 
     private func setupUI() {
@@ -126,7 +145,7 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func makeGeneralTab() -> NSView {
-        let view = NSView()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 320))
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -158,52 +177,55 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     private func makeDatabaseTab() -> NSView {
-        let view = NSView()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 320))
 
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        dbVersionLabel.alignment = .center
+        lastUpdatedLabel.alignment = .center
 
-        let label = NSTextField(labelWithString: "License Key")
-
-        let keyRow = NSStackView()
-        keyRow.orientation = .horizontal
-        keyRow.spacing = 8
-
-        licenseKeyPlainField.isHidden = true
-        licenseKeySecureField.placeholderString = "MaxMind License Key"
-        licenseKeyPlainField.placeholderString = "MaxMind License Key"
-
-        showLicenseButton.target = self
-        showLicenseButton.action = #selector(toggleShowLicense)
-
-        keyRow.addArrangedSubview(licenseKeySecureField)
-        keyRow.addArrangedSubview(licenseKeyPlainField)
-        keyRow.addArrangedSubview(showLicenseButton)
-
-        licenseKeySecureField.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+        attributionButton.isBordered = false
+        attributionButton.contentTintColor = .linkColor
+        attributionButton.alignment = .center
+        attributionButton.target = self
+        attributionButton.action = #selector(openAttribution)
 
         updateDBButton.target = self
         updateDBButton.action = #selector(updateDatabase)
 
+        updateProgressBar.style = .bar
+        updateProgressBar.isIndeterminate = true
+        updateProgressBar.controlSize = .regular
+        updateProgressBar.translatesAutoresizingMaskIntoConstraints = false
+        updateProgressBar.isHidden = true
+
+        updateProgressLabel.alignment = .center
+        updateProgressLabel.textColor = .secondaryLabelColor
+        updateProgressLabel.isHidden = true
+
         autoUpdateCheckbox.target = self
         autoUpdateCheckbox.action = #selector(autoUpdateChanged)
 
-        [label, keyRow, dbStatusLabel, updateDBButton, autoUpdateCheckbox].forEach(stack.addArrangedSubview)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        [dbVersionLabel, lastUpdatedLabel, updateDBButton, updateProgressBar, updateProgressLabel, autoUpdateCheckbox, attributionButton].forEach(stack.addArrangedSubview)
 
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
+            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            updateProgressBar.widthAnchor.constraint(equalToConstant: 320),
         ])
 
         return view
     }
 
     private func makeAdvancedTab() -> NSView {
-        let view = NSView()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 320))
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -272,22 +294,7 @@ final class PreferencesWindowController: NSWindowController {
         onLaunchAtLoginChanged?(launchAtLoginCheckbox.state == .on)
     }
 
-    @objc private func toggleShowLicense() {
-        let show = showLicenseButton.state == .on
-        if show {
-            licenseKeyPlainField.stringValue = licenseKeySecureField.stringValue
-        } else {
-            licenseKeySecureField.stringValue = licenseKeyPlainField.stringValue
-        }
-        licenseKeySecureField.isHidden = show
-        licenseKeyPlainField.isHidden = !show
-    }
-
     @objc private func updateDatabase() {
-        let visibleValue = showLicenseButton.state == .on ? licenseKeyPlainField.stringValue : licenseKeySecureField.stringValue
-        if !visibleValue.isEmpty {
-            try? KeychainHelper.saveLicenseKey(visibleValue)
-        }
         onDatabaseUpdateRequested?()
     }
 
@@ -308,5 +315,10 @@ final class PreferencesWindowController: NSWindowController {
     @objc private func resetDefaults() {
         onResetDefaults?()
         reloadValues()
+    }
+
+    @objc private func openAttribution() {
+        guard let url = URL(string: "https://db-ip.com") else { return }
+        NSWorkspace.shared.open(url)
     }
 }

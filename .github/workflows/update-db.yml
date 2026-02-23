@@ -1,0 +1,21 @@
+name: Update DB-IP Database
+
+on:
+  schedule:
+    - cron: '0 6 2 * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest DB-IP Lite
+        run: bash scripts/update-dbip.sh
+
+      - name: Commit if changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update DB-IP Lite database"
+          file_pattern: "IPRegionBar/Resources/dbip-city-lite.mmdb IPRegionBar/Resources/dbip-city-lite.meta.json"

@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial implementation of IP Region Bar from PRD.
-- Menu bar app state machine with offline and error states.
-- Local geolocation lookup service with GeoLite2 database update flow.
-- Onboarding UI for MaxMind license key setup.
-- Preferences UI with general/database/advanced tabs.
-- GitHub Actions workflows for build and release.
-- Homebrew cask formula template.
+### Changed
+- Migrated app architecture to PRD v2 (DB-IP Lite, zero onboarding).
+- Replaced MaxMind license-key flow with bundled DB-IP database flow.
+- Added monthly DB update pipeline (script + GitHub Actions workflow).
+- Reworked preferences Database tab for DB version/update/attribution.
+- Added About menu with required DB-IP attribution.
+- Switched Homebrew cask source to `Casks/ipregionbar.rb` for tap compatibility.
+- Updated release pipeline to build universal app (`arm64 + x86_64`) and auto-bump cask version/sha256.
+- Simplified release pipeline to operate without paid Apple Developer signing/notarization.
 
+### Removed
+- Onboarding window and Keychain-based license key flow.

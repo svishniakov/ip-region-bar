@@ -145,49 +145,92 @@ final public class MMDB {
     }
     
     private func dump(list: ListPtr?) -> (ptr: ListPtr?, out: Any?) {
-        var list = list
-        switch getType(list!) {
+        guard let node = list else {
+            return (ptr: nil, out: nil)
+        }
+
+        switch getType(node) {
             
         case MMDB_DATA_TYPE_MAP:
             let dict = NSMutableDictionary()
-            var size = getSize(list!)
+            var size = getSize(node)
+            var cursor = node.pointee.next
             
-            list = list?.pointee.next
-            while size > 0 && list != nil {
-                let key = getString(list!)
-                list = list?.pointee.next
-                let sub = dump(list: list)
-                list = sub.ptr
+            while size > 0, let keyNode = cursor {
+                let key = getString(keyNode)
+                let valueNode = keyNode.pointee.next
+                let sub = dump(list: valueNode)
+                cursor = sub.ptr
                 if let out = sub.out, key.count > 0 {
                     dict[key] = out
-                } else {
-                    break
                 }
                 size -= 1
             }
-            return (ptr: list, out: dict)
+            return (ptr: cursor, out: dict)
+
+        case MMDB_DATA_TYPE_ARRAY:
+            var array = [Any]()
+            var size = getSize(node)
+            var cursor = node.pointee.next
+
+            while size > 0, let valueNode = cursor {
+                let sub = dump(list: valueNode)
+                cursor = sub.ptr
+                if let out = sub.out {
+                    array.append(out)
+                }
+                size -= 1
+            }
+            return (ptr: cursor, out: array)
             
         case MMDB_DATA_TYPE_UTF8_STRING:
-            let str = getString(list!)
-            list = list?.pointee.next
-            return (ptr: list, out: str)
-            
+            let str = getString(node)
+            let next = node.pointee.next
+            return (ptr: next, out: str)
+
+        case MMDB_DATA_TYPE_BOOLEAN:
+            let value = NSNumber(value: node.pointee.entry_data.boolean)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_DOUBLE:
+            let value = NSNumber(value: node.pointee.entry_data.double_value)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_FLOAT:
+            let value = NSNumber(value: node.pointee.entry_data.float_value)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_UINT16:
+            let value = NSNumber(value: node.pointee.entry_data.uint16)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
         case MMDB_DATA_TYPE_UINT32:
-            var res: NSNumber = 0
-            if let entryData = list?.pointee.entry_data {
-                var mutableEntryData = entryData
-                if let uint = MMDB_get_entry_data_uint32(&mutableEntryData) {
-                    let v: UInt32 = uint.pointee
-                    res = NSNumber(value: v)
-                }
-            }
-            list = list?.pointee.next
-            return (ptr: list, out: res)
-            
-        default: ()
-            
+            let value = NSNumber(value: node.pointee.entry_data.uint32)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_INT32:
+            let value = NSNumber(value: node.pointee.entry_data.int32)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_UINT64:
+            let value = NSNumber(value: node.pointee.entry_data.uint64)
+            let next = node.pointee.next
+            return (ptr: next, out: value)
+
+        case MMDB_DATA_TYPE_UINT128:
+            let next = node.pointee.next
+            return (ptr: next, out: nil)
+
+        default:
+            let next = node.pointee.next
+            return (ptr: next, out: nil)
         }
-        return (ptr: list, out: nil)
     }
     
     public func lookup(ip: String) -> NSDictionary? {

@@ -5,12 +5,12 @@ import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController!
-    private var onboardingWindowController: OnboardingWindowController?
     private var preferencesWindowController: PreferencesWindowController?
 
     private var networkDebounceTask: Task<Void, Never>?
     private var fetchTask: Task<Void, Never>?
 
+    @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBarController = StatusBarController()
         AppDefaults.register()
@@ -22,16 +22,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController.onPreferencesRequest = { [weak self] in
             self?.openPreferences()
         }
+        statusBarController.onAboutRequest = { [weak self] in
+            self?.showAbout()
+        }
 
         requestNotificationPermission()
         setupNetworkMonitor()
         setupPreferencesController()
 
-        Task { @MainActor [weak self] in
+        Task { [weak self] in
             await self?.bootstrapApplication()
         }
     }
 
+    @MainActor
     func applicationWillTerminate(_ notification: Notification) {
         NetworkMonitor.shared.stop()
         networkDebounceTask?.cancel()
@@ -40,73 +44,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func bootstrapApplication() async {
-        let licenseKey = (try? KeychainHelper.readLicenseKey()) ?? nil
-        let dbReady = await GeoLiteDatabase.shared.isReady
-
-        if !dbReady {
-            if let licenseKey, !licenseKey.isEmpty {
-                do {
-                    try await GeoLiteDatabase.shared.downloadOrUpdate(licenseKey: licenseKey) { [weak self] progress in
-                        Task { @MainActor in
-                            self?.statusBarController.setDatabaseStatus(.downloading(progress: progress))
-                        }
-                    }
-                    try await IPGeolocationService.shared.loadDatabase()
-                } catch {
-                    statusBarController.updateState(.onboarding)
-                    showOnboarding()
-                    return
-                }
-            } else {
-                statusBarController.updateState(.onboarding)
-                showOnboarding()
-                return
-            }
-        } else {
-            do {
-                try await IPGeolocationService.shared.loadDatabase()
-            } catch {
-                statusBarController.updateState(.error(error.localizedDescription))
-                return
-            }
+        do {
+            try await IPGeolocationService.shared.loadDatabase()
+        } catch {
+            statusBarController.updateState(.error(error.localizedDescription))
+            return
         }
 
-        let dbStatus = await GeoLiteDatabase.shared.status()
-        statusBarController.setDatabaseStatus(dbStatus)
-        preferencesWindowController?.updateDatabaseStatus(dbStatus)
+        await syncDatabaseStatus()
         statusBarController.scheduleRefresh()
         startFetch()
 
-        Task.detached {
-            await GeoLiteDatabase.shared.checkAndUpdateIfNeeded(licenseKey: licenseKey)
-        }
-    }
-
-    private func showOnboarding() {
-        let controller = OnboardingWindowController()
-
-        controller.onDownloadRequested = { licenseKey, progress in
-            try await GeoLiteDatabase.shared.downloadOrUpdate(licenseKey: licenseKey) { value in
-                progress(value)
-            }
-            try await IPGeolocationService.shared.loadDatabase()
-
-            let status = await GeoLiteDatabase.shared.status()
-            await MainActor.run {
-                self.statusBarController.setDatabaseStatus(status)
-                self.preferencesWindowController?.updateDatabaseStatus(status)
-            }
-        }
-
-        controller.onCompleted = { [weak self] in
+        Task.detached { [weak self] in
             guard let self else { return }
-            self.statusBarController.scheduleRefresh()
-            self.startFetch()
+            let didUpdate = await DBIPDatabase.shared.updateIfNeeded()
+            if didUpdate {
+                try? await IPGeolocationService.shared.reloadDatabase()
+                await self.startFetch()
+                await self.syncDatabaseStatus()
+            } else {
+                await self.syncDatabaseStatus()
+            }
         }
-
-        onboardingWindowController = controller
-        controller.showWindowAndActivate()
-        statusBarController.updateState(.onboarding)
     }
 
     private func requestNotificationPermission() {
@@ -119,17 +78,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             if path.status == .satisfied, didInterfaceChange {
                 self.networkDebounceTask?.cancel()
-                self.networkDebounceTask = Task {
+                self.networkDebounceTask = Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    await MainActor.run {
-                        self.startFetch()
-                    }
+                    guard let self else { return }
+                    await self.startFetch()
                 }
             }
 
             if path.status != .satisfied {
-                Task { @MainActor in
-                    self.statusBarController.updateState(.offline(last: self.statusBarController.currentInfo))
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.updateOfflineState()
                 }
             }
         }
@@ -137,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NetworkMonitor.shared.start()
     }
 
+    @MainActor
     private func startFetch() {
         fetchTask?.cancel()
         fetchTask = Task { [weak self] in
@@ -145,49 +105,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @MainActor
     private func fetchAndUpdate() async {
-        await MainActor.run {
-            statusBarController.updateState(.loading)
-        }
+        statusBarController.updateState(.loading)
 
         do {
             let ip = try await ExternalIPService.shared.fetchIP()
             try await IPGeolocationService.shared.reloadDatabaseIfNeeded()
             let info = try await IPGeolocationService.shared.lookup(ip: ip)
-
-            await MainActor.run {
-                statusBarController.updateState(.loaded(info))
-                statusBarController.scheduleRefresh()
-            }
+            statusBarController.updateState(.loaded(info))
+            statusBarController.scheduleRefresh()
         } catch {
-            await MainActor.run {
-                let current = statusBarController.currentInfo
-                if current != nil {
-                    statusBarController.updateState(.offline(last: current))
-                } else {
-                    statusBarController.updateState(.error(error.localizedDescription))
-                }
+            let current = statusBarController.currentInfo
+            if current != nil {
+                statusBarController.updateState(.offline(last: current))
+            } else {
+                statusBarController.updateState(.error(error.localizedDescription))
             }
         }
 
-        let status = await GeoLiteDatabase.shared.status()
-        await MainActor.run {
-            statusBarController.setDatabaseStatus(status)
-            preferencesWindowController?.updateDatabaseStatus(status)
-        }
+        await syncDatabaseStatus()
     }
 
+    @MainActor
     private func setupPreferencesController() {
         let controller = PreferencesWindowController()
 
-        controller.onDisplayModeChanged = { mode in
+        controller.onDisplayModeChanged = { [weak self] mode in
             UserDefaults.standard.set(mode.rawValue, forKey: SettingsKey.displayMode)
+            guard let self else { return }
             self.statusBarController.updateState(self.statusBarController.currentState)
         }
 
-        controller.onRefreshIntervalChanged = { interval in
+        controller.onRefreshIntervalChanged = { [weak self] interval in
             UserDefaults.standard.set(interval, forKey: SettingsKey.refreshInterval)
-            self.statusBarController.scheduleRefresh()
+            self?.statusBarController.scheduleRefresh()
         }
 
         controller.onLaunchAtLoginChanged = { enabled in
@@ -197,36 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         controller.onAutoUpdateChanged = { enabled in
             UserDefaults.standard.set(enabled, forKey: SettingsKey.autoUpdateDB)
+            Task { [weak self] in
+                await self?.syncDatabaseStatus()
+            }
         }
 
         controller.onDatabaseUpdateRequested = { [weak self] in
-            guard let self else { return }
             Task { [weak self] in
                 guard let self else { return }
-                do {
-                    guard let key = try KeychainHelper.readLicenseKey(), !key.isEmpty else {
-                        await MainActor.run {
-                            self.showOnboarding()
-                        }
-                        return
-                    }
-
-                    try await GeoLiteDatabase.shared.downloadOrUpdate(licenseKey: key) { progress in
-                        Task { @MainActor in
-                            self.statusBarController.setDatabaseStatus(.downloading(progress: progress))
-                            self.preferencesWindowController?.updateDatabaseStatus(.downloading(progress: progress))
-                        }
-                    }
-
-                    try await IPGeolocationService.shared.loadDatabase()
-                    await self.fetchAndUpdate()
-                } catch {
-                    let failed = DatabaseStatus.updateFailed(error: error)
-                    await MainActor.run {
-                        self.statusBarController.setDatabaseStatus(failed)
-                        self.preferencesWindowController?.updateDatabaseStatus(failed)
-                    }
-                }
+                await self.performManualDatabaseUpdate()
             }
         }
 
@@ -254,8 +185,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         preferencesWindowController = controller
     }
 
+    @MainActor
+    private func syncDatabaseStatus() async {
+        let status = await DBIPDatabase.shared.status()
+        let needsReminder = await DBIPDatabase.shared.needsManualUpdateReminder()
+        statusBarController.setDatabaseStatus(status)
+        statusBarController.setNeedsDatabaseUpdateReminder(needsReminder)
+        preferencesWindowController?.updateDatabaseStatus(status)
+    }
+
+    @MainActor
     private func openPreferences() {
         preferencesWindowController?.reloadValues()
+        Task { [weak self] in
+            await self?.syncDatabaseStatus()
+        }
         preferencesWindowController?.showWindowAndActivate()
+    }
+
+    @MainActor
+    private func showAbout() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+
+        let alert = NSAlert()
+        alert.messageText = "IP Region Bar v\(version)"
+        alert.informativeText = """
+        Developer: svishniakov
+        GitHub: https://github.com/svishniakov/ip-region-bar
+
+        Geolocation data: DB-IP.com (CC BY 4.0)
+        https://db-ip.com
+        """
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open GitHub")
+        alert.addButton(withTitle: "Open DB-IP")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn,
+           let url = URL(string: "https://github.com/svishniakov/ip-region-bar") {
+            NSWorkspace.shared.open(url)
+        } else if response == .alertThirdButtonReturn,
+                  let url = URL(string: "https://db-ip.com") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @MainActor
+    private func updateOfflineState() {
+        statusBarController.updateState(.offline(last: statusBarController.currentInfo))
+    }
+
+    @MainActor
+    private func performManualDatabaseUpdate() async {
+        statusBarController.setDatabaseStatus(.updating)
+        preferencesWindowController?.updateDatabaseStatus(.updating)
+
+        let didUpdate = await DBIPDatabase.shared.updateNow()
+        if didUpdate {
+            try? await IPGeolocationService.shared.reloadDatabase()
+            await fetchAndUpdate()
+        } else {
+            await syncDatabaseStatus()
+        }
     }
 }

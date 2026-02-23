@@ -7,14 +7,15 @@ final class StatusBarController: NSObject {
 
     private(set) var currentInfo: IPInfo?
     private(set) var currentState: AppState = .loading
-    private(set) var databaseStatus: DatabaseStatus = .missing
+    private(set) var databaseStatus: DatabaseStatus = .bundled(month: "unknown")
+    private(set) var needsDatabaseUpdateReminder = false
 
     var onRefreshRequest: (() -> Void)?
     var onPreferencesRequest: (() -> Void)?
+    var onAboutRequest: (() -> Void)?
 
     override init() {
         super.init()
-        NSLog("StatusBarController init, buttonExists=%@", statusItem.button != nil ? "yes" : "no")
         setLabel(for: .loading)
         rebuildMenu()
     }
@@ -39,6 +40,12 @@ final class StatusBarController: NSObject {
         rebuildMenu()
     }
 
+    func setNeedsDatabaseUpdateReminder(_ needsReminder: Bool) {
+        needsDatabaseUpdateReminder = needsReminder
+        setLabel(for: currentState)
+        rebuildMenu()
+    }
+
     func scheduleRefresh() {
         refreshTimer?.invalidate()
         let interval = UserDefaults.standard.double(forKey: SettingsKey.refreshInterval)
@@ -47,13 +54,8 @@ final class StatusBarController: NSObject {
             return
         }
 
-        let refreshAction = onRefreshRequest
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            if let refreshAction {
-                refreshAction()
-            } else {
-                self?.onRefreshRequest?()
-            }
+            self?.onRefreshRequest?()
         }
     }
 
@@ -70,7 +72,7 @@ final class StatusBarController: NSObject {
             if let last {
                 currentInfo = last
             }
-        case .onboarding, .loading, .error:
+        case .loading, .error:
             break
         }
 
@@ -79,31 +81,30 @@ final class StatusBarController: NSObject {
     }
 
     private func setLabel(for state: AppState) {
+        let reminderPrefix = needsDatabaseUpdateReminder ? "❗️ " : ""
         let text: String
 
         switch state {
-        case .onboarding:
-            text = "🌐 Setup…"
         case .loading:
             text = "🌐 …"
         case .loaded(let info):
             switch DisplayMode.current {
             case .flagCityCountry:
                 if info.city.isEmpty {
-                    text = "\(info.flagEmoji) \(info.countryName)"
+                    text = "\(reminderPrefix)\(info.flagEmoji) \(info.countryName)"
                 } else {
-                    text = "\(info.flagEmoji) \(info.city), \(info.countryName)"
+                    text = "\(reminderPrefix)\(info.flagEmoji) \(info.city), \(info.countryName)"
                 }
             case .flagCountry:
-                text = "\(info.flagEmoji) \(info.countryName)"
+                text = "\(reminderPrefix)\(info.flagEmoji) \(info.countryName)"
             case .flagOnly:
-                text = info.flagEmoji
+                text = "\(reminderPrefix)\(info.flagEmoji)"
             case .ipOnly:
-                text = info.ip
+                text = "\(reminderPrefix)\(info.ip)"
             }
         case .offline(let last):
             if let last {
-                text = "\(last.flagEmoji) \(last.city.isEmpty ? last.countryName : last.city) ⚠️"
+                text = "\(reminderPrefix)\(last.flagEmoji) \(last.city.isEmpty ? last.countryName : last.city) ⚠️"
             } else {
                 text = "🌐 —"
             }
@@ -112,14 +113,14 @@ final class StatusBarController: NSObject {
         }
 
         statusItem.button?.title = text
-        NSLog("Status label updated to: %@", text)
     }
 
     private func rebuildMenu() {
         let menu = MenuBuilder.build(
             state: currentState,
             info: currentInfo,
-            databaseStatus: databaseStatus
+            databaseStatus: databaseStatus,
+            needsDatabaseUpdateReminder: needsDatabaseUpdateReminder
         )
 
         for item in menu.items {
@@ -127,6 +128,8 @@ final class StatusBarController: NSObject {
             case #selector(refreshNow):
                 item.target = self
             case #selector(openPreferences):
+                item.target = self
+            case #selector(openAbout):
                 item.target = self
             case #selector(quitApp):
                 item.target = self
@@ -153,6 +156,10 @@ final class StatusBarController: NSObject {
 
     @objc func openPreferences() {
         onPreferencesRequest?()
+    }
+
+    @objc func openAbout() {
+        onAboutRequest?()
     }
 
     @objc func quitApp() {
