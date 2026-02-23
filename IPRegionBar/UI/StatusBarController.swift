@@ -7,10 +7,11 @@ final class StatusBarController: NSObject {
 
     private(set) var currentInfo: IPInfo?
     private(set) var currentState: AppState = .loading
-    private(set) var databaseStatus: DatabaseStatus = .bundled(month: "unknown")
+    private(set) var databaseStatus: DatabaseStatus = .notInstalled
     private(set) var needsDatabaseUpdateReminder = false
 
     var onRefreshRequest: (() -> Void)?
+    var onDownloadDatabaseRequest: (() -> Void)?
     var onPreferencesRequest: (() -> Void)?
     var onAboutRequest: (() -> Void)?
 
@@ -72,7 +73,7 @@ final class StatusBarController: NSObject {
             if let last {
                 currentInfo = last
             }
-        case .loading, .error:
+        case .loading, .error, .setupRequired:
             break
         }
 
@@ -85,6 +86,8 @@ final class StatusBarController: NSObject {
         let text: String
 
         switch state {
+        case .setupRequired:
+            text = "⬇️ GeoIP DB required"
         case .loading:
             text = "🌐 …"
         case .loaded(let info):
@@ -127,6 +130,8 @@ final class StatusBarController: NSObject {
             switch item.action {
             case #selector(refreshNow):
                 item.target = self
+            case #selector(downloadDatabase):
+                item.target = self
             case #selector(openPreferences):
                 item.target = self
             case #selector(openAbout):
@@ -156,6 +161,10 @@ final class StatusBarController: NSObject {
 
     @objc func openPreferences() {
         onPreferencesRequest?()
+    }
+
+    @objc func downloadDatabase() {
+        onDownloadDatabaseRequest?()
     }
 
     @objc func openAbout() {

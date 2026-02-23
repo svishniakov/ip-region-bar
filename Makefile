@@ -7,7 +7,7 @@ APP_BINARY   = $(BUILD_DIR)/$(APP_NAME).app/Contents/MacOS/$(APP_NAME)
 CODESIGN_IDENTITY ?= -
 CODESIGN_EXTRA_FLAGS ?=
 
-.PHONY: build build-universal build-local package-app sign-app verify-universal dmg notarize release release-notarized update-db
+.PHONY: build build-universal build-local package-app sign-app verify-universal dmg notarize release release-notarized
 
 build:
 	$(MAKE) build-universal
@@ -37,8 +37,6 @@ package-app:
 		cp "$(BINARY_PATH)" "$(APP_BINARY)"; \
 	fi
 	cp "IPRegionBar/App/Info.plist" "$(BUILD_DIR)/$(APP_NAME).app/Contents/Info.plist"
-	cp "IPRegionBar/Resources/dbip-city-lite.mmdb" "$(BUILD_DIR)/$(APP_NAME).app/Contents/Resources/dbip-city-lite.mmdb"
-	cp "IPRegionBar/Resources/dbip-city-lite.meta.json" "$(BUILD_DIR)/$(APP_NAME).app/Contents/Resources/dbip-city-lite.meta.json"
 	chmod +x "$(APP_BINARY)"
 	$(MAKE) sign-app
 
@@ -61,9 +59,6 @@ notarize:
 	  --password "$(APPLE_APP_PASSWORD)" \
 	  --wait
 	xcrun stapler staple "$(BUILD_DIR)/$(APP_NAME).dmg"
-
-update-db:
-	bash scripts/update-dbip.sh
 
 release: build dmg
 

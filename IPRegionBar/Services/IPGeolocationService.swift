@@ -7,7 +7,9 @@ actor IPGeolocationService {
     private var reader: MMDB?
 
     func loadDatabase() async throws {
-        let dbURL = await DBIPDatabase.shared.activeDatabaseURL
+        guard let dbURL = await DBIPDatabase.shared.activeDatabaseURL else {
+            throw GeoError.databaseNotLoaded
+        }
         guard let loaded = MMDB(dbURL.path) else {
             throw GeoError.databaseNotLoaded
         }

@@ -19,6 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController.onRefreshRequest = { [weak self] in
             self?.startFetch()
         }
+        statusBarController.onDownloadDatabaseRequest = { [weak self] in
+            Task { [weak self] in
+                guard let self else { return }
+                await self.performManualDatabaseUpdate()
+            }
+        }
         statusBarController.onPreferencesRequest = { [weak self] in
             self?.openPreferences()
         }
@@ -44,6 +50,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func bootstrapApplication() async {
+        guard await DBIPDatabase.shared.isInstalled() else {
+            statusBarController.updateState(.setupRequired)
+            await syncDatabaseStatus()
+            return
+        }
+
         do {
             try await IPGeolocationService.shared.loadDatabase()
         } catch {
@@ -101,12 +113,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fetchTask?.cancel()
         fetchTask = Task { [weak self] in
             guard let self else { return }
+
+            let installed = await DBIPDatabase.shared.isInstalled()
+            guard installed else {
+                await self.syncDatabaseStatus()
+                self.statusBarController.updateState(.setupRequired)
+                return
+            }
+
             await self.fetchAndUpdate()
         }
     }
 
     @MainActor
     private func fetchAndUpdate() async {
+        guard await DBIPDatabase.shared.isInstalled() else {
+            statusBarController.updateState(.setupRequired)
+            await syncDatabaseStatus()
+            return
+        }
+
         statusBarController.updateState(.loading)
 
         do {
@@ -231,20 +257,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func updateOfflineState() {
-        statusBarController.updateState(.offline(last: statusBarController.currentInfo))
+    private func updateOfflineState() async {
+        if await DBIPDatabase.shared.isInstalled() {
+            statusBarController.updateState(.offline(last: statusBarController.currentInfo))
+        } else {
+            statusBarController.updateState(.setupRequired)
+        }
     }
 
     @MainActor
     private func performManualDatabaseUpdate() async {
+        let wasInstalled = await DBIPDatabase.shared.isInstalled()
         statusBarController.setDatabaseStatus(.updating)
         preferencesWindowController?.updateDatabaseStatus(.updating)
 
-        let didUpdate = await DBIPDatabase.shared.updateNow()
+        let didUpdate = wasInstalled
+            ? await DBIPDatabase.shared.updateNow()
+            : await DBIPDatabase.shared.installNow()
+
         if didUpdate {
             try? await IPGeolocationService.shared.reloadDatabase()
+            statusBarController.scheduleRefresh()
             await fetchAndUpdate()
+            await syncDatabaseStatus()
         } else {
+            if wasInstalled == false {
+                statusBarController.updateState(.setupRequired)
+            }
             await syncDatabaseStatus()
         }
     }

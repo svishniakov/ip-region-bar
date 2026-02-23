@@ -8,8 +8,8 @@ Native macOS menu bar app that shows your current external IP geolocation in rea
 
 ## Highlights
 
-- Zero onboarding: works immediately after install
-- Local geolocation lookup via bundled DB-IP Lite `.mmdb`
+- First-run setup: download DB-IP Lite from inside the app
+- Local geolocation lookup via user-downloaded DB-IP Lite `.mmdb`
 - Privacy-first: no third-party geolocation API calls
 - Offline-ready: shows last known region when the network is down
 - Auto refresh on network/VPN changes
@@ -21,9 +21,14 @@ Native macOS menu bar app that shows your current external IP geolocation in rea
 ## Installation (Homebrew)
 
 ```bash
-brew tap svishniakov/ip-region-bar
+brew tap svishniakov/ip-region-bar https://github.com/svishniakov/ip-region-bar
 brew install --cask ipregionbar
 ```
+
+## First Run Setup
+
+After launch, click **Download DB-IP database now** in menu or Preferences.
+Geolocation features become available right after the database is installed.
 
 ## First Launch Note (Without Apple Notarization)
 
@@ -69,10 +74,8 @@ make dmg
 
 ## Database Updates
 
-Monthly DB-IP Lite updates are handled by:
-
-- CI workflow: `.github/workflows/update-db.yml`
-- Local script: `bash scripts/update-dbip.sh`
+Use **Update database now** in Preferences for manual updates.
+Monthly auto-update is enabled by default and can be toggled in Preferences.
 
 ## Attribution (Required by DB-IP License)
 
@@ -81,7 +84,7 @@ This product includes IP geolocation data created by DB-IP.com, available from [
 ## Privacy
 
 - External IP is fetched from IP-only providers (`api64.ipify.org` / `checkip.amazonaws.com`)
-- Geolocation is resolved locally from bundled/user DB-IP `.mmdb`
+- Geolocation is resolved locally from user DB-IP `.mmdb`
 
 ## Contributing
 

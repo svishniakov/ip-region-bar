@@ -7,6 +7,7 @@ enum SettingsKey {
     static let autoUpdateDB = "autoUpdateDB"
     static let dbLastUpdated = "dbLastUpdated"
     static let dbMonth = "dbMonth"
+    static let dbInstalledByUser = "dbInstalledByUser"
     static let ipProvider = "ipProvider"
     static let requestTimeout = "requestTimeout"
     static let lastKnownIPInfo = "lastKnownIPInfo"

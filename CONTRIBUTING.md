@@ -12,16 +12,10 @@ Thanks for contributing to IP Region Bar.
 make build
 ```
 
-## Update DB-IP Database Manually
+## GeoIP Runtime Setup
 
-```bash
-bash scripts/update-dbip.sh
-```
-
-This updates:
-
-- `IPRegionBar/Resources/dbip-city-lite.mmdb`
-- `IPRegionBar/Resources/dbip-city-lite.meta.json`
+The app no longer ships with a bundled GeoIP database.
+On first launch, install DB-IP Lite from inside the app using **Download database now**.
 
 ## Homebrew Cask
 
@@ -32,7 +26,7 @@ This repository is also a Homebrew tap. The cask file is:
 For local verification:
 
 ```bash
-brew tap svishniakov/ip-region-bar
+brew tap svishniakov/ip-region-bar https://github.com/svishniakov/ip-region-bar
 brew audit --cask --strict ipregionbar
 ```
 

@@ -15,9 +15,9 @@ final class PreferencesWindowController: NSWindowController {
     private let refreshPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at Login", target: nil, action: nil)
 
-    private let dbVersionLabel = NSTextField(labelWithString: "Database version: DB-IP Lite · unknown")
+    private let dbVersionLabel = NSTextField(labelWithString: "Database version: not installed")
     private let lastUpdatedLabel = NSTextField(labelWithString: "Last updated: never")
-    private let updateDBButton = NSButton(title: "Update database now", target: nil, action: nil)
+    private let updateDBButton = NSButton(title: "Download database now", target: nil, action: nil)
     private let updateProgressBar = NSProgressIndicator()
     private let updateProgressLabel = NSTextField(labelWithString: "Updating database…")
     private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Enable monthly auto-update", target: nil, action: nil)
@@ -51,17 +51,22 @@ final class PreferencesWindowController: NSWindowController {
     func updateDatabaseStatus(_ status: DatabaseStatus) {
         let isUpdating: Bool
         switch status {
-        case .bundled(let month):
-            dbVersionLabel.stringValue = "Database version: DB-IP Lite · \(month)"
+        case .notInstalled:
+            dbVersionLabel.stringValue = "Database version: not installed"
+            updateDBButton.title = "Download database now"
+            lastUpdatedLabel.stringValue = "Last updated: never"
             isUpdating = false
-        case .updated(let month):
+        case .installed(let month):
             dbVersionLabel.stringValue = "Database version: DB-IP Lite · \(month)"
+            updateDBButton.title = "Update database now"
             isUpdating = false
         case .updating:
             dbVersionLabel.stringValue = "Database version: updating…"
             isUpdating = true
         case .updateFailed:
             dbVersionLabel.stringValue = "Database version: update failed"
+            let hasInstalledDatabase = UserDefaults.standard.bool(forKey: SettingsKey.dbInstalledByUser)
+            updateDBButton.title = hasInstalledDatabase ? "Update database now" : "Download database now"
             isUpdating = false
         }
 
@@ -77,8 +82,14 @@ final class PreferencesWindowController: NSWindowController {
 
         if let updatedAt = UserDefaults.standard.object(forKey: SettingsKey.dbLastUpdated) as? Date {
             lastUpdatedLabel.stringValue = "Last updated: \(formatted(updatedAt))"
+        } else if case .notInstalled = status {
+            lastUpdatedLabel.stringValue = "Last updated: never"
+        } else if case .updateFailed = status {
+            if UserDefaults.standard.bool(forKey: SettingsKey.dbInstalledByUser) == false {
+                lastUpdatedLabel.stringValue = "Last updated: never"
+            }
         } else {
-            lastUpdatedLabel.stringValue = "Last updated: bundled with app"
+            lastUpdatedLabel.stringValue = "Last updated: unknown"
         }
     }
 

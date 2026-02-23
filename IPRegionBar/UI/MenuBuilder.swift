@@ -19,7 +19,7 @@ enum MenuBuilder {
         menu.addItem(titleItem)
         menu.addItem(.separator())
 
-        if let info {
+        if shouldShowInfo(for: state), let info {
             menu.addItem(copyableItem(label: "IP", value: info.ip, action: #selector(StatusBarController.copyIP), target: nil))
             menu.addItem(copyableItem(label: "Country", value: info.countryName, action: #selector(StatusBarController.copyCountry), target: nil))
             menu.addItem(copyableItem(label: "City", value: info.city.isEmpty ? "Unknown" : info.city, action: #selector(StatusBarController.copyCity), target: nil))
@@ -44,6 +44,12 @@ enum MenuBuilder {
             ]
         )
         menu.addItem(dbItem)
+
+        if case .setupRequired = state {
+            let setupItem = NSMenuItem(title: "Download DB-IP database now", action: #selector(StatusBarController.downloadDatabase), keyEquivalent: "")
+            setupItem.toolTip = "Required for geolocation lookups"
+            menu.addItem(setupItem)
+        }
 
         if needsDatabaseUpdateReminder {
             let reminderItem = NSMenuItem(title: "❗️ Need to update GeoIP database", action: nil, keyEquivalent: "")
@@ -88,6 +94,8 @@ enum MenuBuilder {
         switch state {
         case .loading:
             return "Loading…"
+        case .setupRequired:
+            return "GeoIP database required"
         case .error(let message):
             return "Error: \(message)"
         case .offline(let last):
@@ -102,14 +110,23 @@ enum MenuBuilder {
 
     private static func databaseStatusTitle(_ status: DatabaseStatus) -> String {
         switch status {
-        case .bundled(let month):
-            return "Database: DB-IP Lite · \(month)"
-        case .updated(let month):
+        case .notInstalled:
+            return "Database: not installed"
+        case .installed(let month):
             return "Database: DB-IP Lite · \(month)"
         case .updating:
             return "Database: updating…"
         case .updateFailed:
             return "Database: update failed"
+        }
+    }
+
+    private static func shouldShowInfo(for state: AppState) -> Bool {
+        switch state {
+        case .loaded, .offline:
+            return true
+        case .setupRequired, .loading, .error:
+            return false
         }
     }
 

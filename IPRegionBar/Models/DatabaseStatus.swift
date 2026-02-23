@@ -1,13 +1,14 @@
 import Foundation
 
 enum DatabaseStatus {
-    case bundled(month: String)
-    case updated(month: String)
+    case notInstalled
+    case installed(month: String)
     case updating
     case updateFailed
 }
 
 enum AppState {
+    case setupRequired
     case loading
     case loaded(IPInfo)
     case offline(last: IPInfo?)
