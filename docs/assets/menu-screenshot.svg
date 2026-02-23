@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-label="IP Region Bar preview placeholder">
+  <rect width="900" height="420" fill="#f3f4f6"/>
+  <rect x="120" y="50" width="660" height="56" rx="14" fill="#111827"/>
+  <text x="450" y="85" text-anchor="middle" font-family="Menlo, monospace" font-size="24" fill="#ffffff">🇩🇪 Frankfurt, Germany</text>
+  <rect x="250" y="120" width="400" height="250" rx="10" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="280" y="160" font-family="Menlo, monospace" font-size="18" fill="#111827">IP: 185.220.101.42</text>
+  <text x="280" y="192" font-family="Menlo, monospace" font-size="18" fill="#111827">Country: Germany</text>
+  <text x="280" y="224" font-family="Menlo, monospace" font-size="18" fill="#111827">City: Frankfurt</text>
+  <text x="280" y="256" font-family="Menlo, monospace" font-size="18" fill="#111827">Region: Hesse</text>
+  <text x="280" y="288" font-family="Menlo, monospace" font-size="18" fill="#111827">Timezone: Europe/Berlin</text>
+  <text x="280" y="340" font-family="Menlo, monospace" font-size="14" fill="#6b7280">Placeholder illustration. Replace with real screenshot/GIF.</text>
+</svg>

@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Universal Binary
+        run: make build
+      - name: Notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: make notarize
+      - name: Create DMG
+        run: make dmg
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/IPRegionBar.dmg
+          generate_release_notes: true

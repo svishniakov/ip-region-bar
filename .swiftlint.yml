@@ -1,0 +1,29 @@
+included:
+  - IPRegionBar
+
+excluded:
+  - IPRegionBar.xcodeproj
+  - .build
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - explicit_init
+
+line_length:
+  warning: 130
+  error: 180
+
+type_body_length:
+  warning: 400
+
+file_length:
+  warning: 600
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - id
+
+trailing_whitespace:
+  ignores_empty_lines: true
