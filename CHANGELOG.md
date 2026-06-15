@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3]
+
+### Fixed
+- Надёжное обновление региона при смене сети и VPN. Раньше статус-бар не обновлялся или обновлялся с задержкой при включении/выключении/смене VPN.
+  - `NetworkMonitor` теперь строит сигнатуру сети по именам интерфейсов (`en0`, `utun4`, …), а не только по типам — появление или смена VPN-интерфейса ловится надёжно.
+  - Обновление запускается на любое `.satisfied`-событие сети с debounce (1с при явной смене интерфейса, 3с в остальных случаях), а не только при смене интерфейса.
+  - Периодический таймер переведён в `.common` run-loop mode — больше не замерзает при открытом меню или окне настроек.
+- Добавлены юнит-тесты для детектирования смены интерфейсов (`NetworkMonitorTests`).
+
 ## [Unreleased]
 
 ### Changed

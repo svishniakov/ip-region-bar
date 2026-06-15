@@ -88,16 +88,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NetworkMonitor.shared.onPathChange = { [weak self] path, didInterfaceChange in
             guard let self else { return }
 
-            if path.status == .satisfied, didInterfaceChange {
+            // Любое достижимое состояние сети — повод перепроверить IP.
+            // didInterfaceChange только ускоряет дебаунс: при явной смене
+            // интерфейса (VPN/сеть) ждём 1 секунду, при прочих событиях — 3,
+            // чтобы безопасно ловить «тихую» смену IP без шторма запросов.
+            if path.status == .satisfied {
                 self.networkDebounceTask?.cancel()
                 self.networkDebounceTask = Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    let delay = didInterfaceChange ? 1_000_000_000 : 3_000_000_000
+                    try? await Task.sleep(nanoseconds: UInt64(delay))
                     guard let self else { return }
                     await self.startFetch()
                 }
             }
 
             if path.status != .satisfied {
+                self.networkDebounceTask?.cancel()
                 Task { [weak self] in
                     guard let self else { return }
                     await self.updateOfflineState()
