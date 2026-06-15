@@ -55,9 +55,14 @@ final class StatusBarController: NSObject {
             return
         }
 
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        // .common mode — чтобы таймер не замерзал, пока открыто меню статус-бара
+        // (mode .menuTracking) или модальное окно настроек (mode .modalPanel).
+        // Без этого периодическое обновление стоит на всё время открытого меню.
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.onRefreshRequest?()
         }
+        RunLoop.main.add(timer, forMode: .common)
+        refreshTimer = timer
     }
 
     func updateState(_ state: AppState) {
